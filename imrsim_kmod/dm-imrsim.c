@@ -272,8 +272,9 @@ static void imrsim_write_completion(struct bio *bio, int err)
 static sector_t imrsim_map_sector(struct dm_target *ti, 
                                   sector_t bi_sector)
 {
-    struct imrsim_c *c = ti->private;
-    return c->start + dm_target_offset(ti, bi_sector);
+    struct imrsim_c *c = ti->private;  // dm_target-private:target specific data 
+    return c->start + dm_target_offset(ti, bi_sector);  // Sector offset taken relative to the start of the target instead of
+                                                        // relative to the start of the device.
 }
 
 /* read page (for meta-data) */
@@ -1777,7 +1778,8 @@ static bool imrsim_ptask_gap_ok(__u32 idx)
 int imrsim_map(struct dm_target *ti, struct bio *bio)
 {
     struct imrsim_c *c = ti->private;
-    int cdir = bio_data_dir(bio);     
+    int cdir = bio_data_dir(bio);      // Return the data direction, READ or WRITE.
+                                       // #define bio_data_dir(bio) \ (op_is_write(bio_op(bio)) ? WRITE : READ) 
 
     if(bio){
         printk(KERN_INFO "imrsim_map: the bio has %u sectors.\n", bio_sectors(bio));

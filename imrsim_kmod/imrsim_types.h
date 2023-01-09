@@ -6,10 +6,11 @@
 #define TOP_TRACK_SIZE 456
 #define BOTTOM_TRACK_SIZE 568
 
-// The total number of mapping table entries
+// The total number of mapping table entries 
+// 映射條目總數
 #define TOTAL_ITEMS (TOP_TRACK_SIZE+BOTTOM_TRACK_SIZE)*TOP_TRACK_NUM_TOTAL
 
-enum imrsim_zone_conditions{
+enum imrsim_zone_conditions{tiao
     Z_COND_NO_WP      = 0x00,
     Z_COND_EMPTY      = 0x01,
     Z_COND_CLOSED     = 0x02,
