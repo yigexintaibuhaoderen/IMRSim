@@ -288,7 +288,7 @@ static int imrsim_read_page(struct block_device *dev, sector_t lba,
         printk(KERN_ERR "imrsim: %s bio_alloc failed\n", __FUNCTION__);
         return -EFAULT;
     }
-    bio->bi_bdev = dev;
+    bio->bi_bdev = dev;  //存放对应的块设备
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
     bio->bi_sector = lba;
     #else
@@ -337,7 +337,7 @@ static int imrsim_write_page(struct block_device *dev, sector_t lba,
         printk(KERN_ERR "imrsim: pstore bio write failed\n");
         ret = -EIO;
     }
-    bio_put(bio);
+    bio_put(bio);  //bio_put()函数减少bio中引用计数器(bi_cnt)的值，如果该值等于0，则释放bio结构以及相关的bio_vec结构。
     return ret;
 }
 
@@ -378,7 +378,7 @@ int read_modify_write_task(void *arg)
         // read the blocks needed to back up
         for(i=0; i<n; i++)
         {
-            pages[i] = alloc_page(GFP_KERNEL);
+            pages[i] = alloc_page(GFP_KERNEL);  //alloc_page(GFP_KERNEL,3) 分配2^3个物理页
             if(!pages[i]){
                 printk(KERN_ERR "imrsim: no enough memory to allocate a page\n");
                 return -ENOMEM;
@@ -1544,7 +1544,9 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
                     if(mapSize < boundary){
                         // first stage allocation
                         isTopTrack = 0;
+                        // Judgment should be redirected to the first few bottom tracks
                         relocateTrackno = mapSize / IMR_BOTTOM_TRACK_SIZE;
+                        // Get the pba corresponding to the bio starting lba
                         bio->bi_iter.bi_sector = zlba  
                             + (((relocateTrackno+1)*(IMR_TOP_TRACK_SIZE)+relocateTrackno*IMR_BOTTOM_TRACK_SIZE)<<IMR_BLOCK_SIZE_SHIFT) 
                             + ((mapSize % IMR_BOTTOM_TRACK_SIZE) << IMR_BLOCK_SIZE_SHIFT);
