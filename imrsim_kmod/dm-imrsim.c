@@ -23,8 +23,8 @@
 */
 
 /* Some basic disk information */
-#define IMR_ZONE_SIZE_SHIFT_DEFAULT      16      /* number of blocks/zone, e.g. 2^16=65536 */
-#define IMR_BLOCK_SIZE_SHIFT_DEFAULT     3       /* number of sectors/block, 8   */
+#define IMR_ZONE_SIZE_SHIFT_DEFAULT      16      /* number of blocks/zone, e.g. 2^16=65536 一个zone有多少block*/
+#define IMR_BLOCK_SIZE_SHIFT_DEFAULT     3       /* number of sectors/block, 8   一个bolock有多少sector*/
 #define IMR_PAGE_SIZE_SHIFT_DEFAULT      3       /* number of sectors/page, 8    */
 #define IMR_SECTOR_SIZE_SHIFT_DEFAULT    9       /* number of bytes/sector, 512  */
 #define IMR_TRANSFER_PENALTY             60      /* usec */
@@ -58,7 +58,7 @@ struct imrsim_c{             /* Mapped devices in the Device Mapper framework, a
     sector_t       start;    /* starting address */
 };
 
-/* Mutex resource locks */
+/* Mutex resource locks  互斥资源锁*/
 struct mutex                     imrsim_zone_lock;
 struct mutex                     imrsim_ioctl_lock;
 
@@ -91,7 +91,7 @@ enum imrsim_conf_change{
 #define IMR_PSTORE_QDEPTH 128
 #define IMR_PSTORE_PG_GAP 2
 
-/* persistent storage task structure */
+/* persistent storage task structure   持久化存储任务结构体*/
 static struct imrsim_pstore_task
 {
     struct task_struct  *pstore_thread; 
@@ -103,7 +103,7 @@ static struct imrsim_pstore_task
     unsigned char        flag;              /* three bit for imrsim_conf_change */
 }imrsim_ptask;
 
-/* RMW scheme structure */
+/* RMW scheme structure   RMW结构体*/
 static struct imrsim_RMW_task
 {
     struct task_struct  *task;
@@ -112,7 +112,7 @@ static struct imrsim_RMW_task
     __u8                lba_num;
 }imrsim_rmw_task;
 
-/* read/write completion structure */
+/* read/write completion structure 读/写完成结构体 */
 static struct imrsim_completion_control
 {
     struct completion   read_event;
@@ -120,14 +120,14 @@ static struct imrsim_completion_control
     struct completion   rmw_event;
 }imrsim_completion;
 
-/* To get the size of the imrsim_stats structure. */
+/* To get the size of the imrsim_stats structure.  获取 imrsim_stats 结构的大小。 */
 static __u32 imrsim_stats_size(void)
 {
     return (sizeof(struct imrsim_dev_stats) + sizeof(__u32) + sizeof(__u64)*2 +
             sizeof(struct imrsim_zone_stats) * IMR_NUMZONES);
 }
 
-/* To get the size of the imrsim_state structure. */
+/* To get the size of the imrsim_state structure. 获取 imrsim_state 结构的大小。*/
 static __u32 imrsim_state_size(void)
 {
     return (sizeof(struct imrsim_state_header) + 
@@ -138,13 +138,13 @@ static __u32 imrsim_state_size(void)
             sizeof(__u32));
 }
 
-/* To get how many sectors a zone has. */
+/* To get how many sectors a zone has. 计算一个zone有多少sector*/
 static __u32 num_sectors_zone(void)
 {
     return (1 << IMR_BLOCK_SIZE_SHIFT << IMR_ZONE_SIZE_SHIFT);
 }
 
-/* To get the sector address where the zone starts. */
+/* To get the sector address where the zone starts. 计算zone开始的sector地址。 */
 static __u64 zone_idx_lba(__u64 idx){
     return (idx << IMR_BLOCK_SIZE_SHIFT << IMR_ZONE_SIZE_SHIFT);
 }
@@ -159,7 +159,7 @@ static __u64 index_power_of_2(__u64 num)
     return index;
 }
 
-/* Device idle time initialization. */
+/* Device idle time initialization. 设备空闲时间初始化。*/
 static void imrsim_dev_idle_init(void)
 {
     imrsim_dev_idle_checkpoint = jiffies;
@@ -167,8 +167,8 @@ static void imrsim_dev_idle_init(void)
     zone_state->stats.dev_stats.idle_stats.dev_idle_time_min = jiffies / HZ;
 }
 
-/* Basic information for initializing zone. */
-static void imrsim_init_zone_default(__u64 sizedev)   /* sizedev: in sectors */
+/* Basic information for initializing zone. 初始化zone的基本信息。*/
+static void imrsim_init_zone_default(__u64 sizedev)   /* sizedev: in sectors 以扇区为单位计算*/
 {
     IMR_CAPACITY = sizedev;
     IMR_ZONE_SIZE_SHIFT = IMR_ZONE_SIZE_SHIFT_DEFAULT;
@@ -179,7 +179,7 @@ static void imrsim_init_zone_default(__u64 sizedev)   /* sizedev: in sectors */
         IMR_NUMZONES, sizedev); 
 }
 
-/* Basic information for initializing the device state (zone_state) */
+/* Basic information for initializing the device state (zone_state) 初始化设备状态（zone_state）的基本信息*/
 static void imrsim_init_zone_state_default(__u32 state_size)
 {
     __u32 i;
@@ -202,8 +202,8 @@ static void imrsim_init_zone_state_default(__u32 state_size)
     zone_state->stats.extra_write_total = 0;
     zone_state->stats.write_total = 0;
     imrsim_reset_stats();  
-    /* To allocate space for the zone_status array and initialize it. */
-    zone_status = (struct imrsim_zone_status *)&zone_state->stats.zone_stats[IMR_NUMZONES];
+    /* To allocate space for the zone_status array and initialize it. 为 zone_status 数组分配空间并初始化它。*/
+    zone_status = (struct imrsim_zone_status *)&zone_state->stats.zone_stats[IMR_NUMZONES]; //强制转换成(struct imrsim_zone_status *)类型指针
     for(i=0; i<IMR_NUMZONES; i++){
         zone_status[i].z_start = i;
         zone_status[i].z_length = num_sectors_zone();
@@ -221,7 +221,7 @@ static void imrsim_init_zone_state_default(__u32 state_size)
     *magic = 0xBEEFBEEF;
 }
 
-/* To initial a device. */
+/* To initial a device. 初始化device。*/
 int imrsim_init_zone_state(__u64 sizedev)
 {
     __u32 state_size;
@@ -230,19 +230,20 @@ int imrsim_init_zone_state(__u64 sizedev)
         printk(KERN_ERR "imrsim: zero capacity detected\n");
         return -EINVAL;
     }
-    imrsim_init_zone_default(sizedev);     /* Initialize the basic information of the zone. */
+    imrsim_init_zone_default(sizedev);     /* Initialize the basic information of the zone. 初始化zone的基本信息。*/
     /* zone_state should not have allocated space, if it already exists, reclaim the space. */
+    /*zone_state 不应该分配空间，如果它已经存在，回收空间。*/
     if(zone_state){
         vfree(zone_state);
     }
     state_size = imrsim_state_size();
-    zone_state = vzalloc(state_size);     /* Allocate memory space for zone_state */
+    zone_state = vzalloc(state_size);     /* Allocate memory space for zone_state 为zone_state分配内存空间*/
     if(!zone_state){
         printk(KERN_ERR "imrsim: memory alloc failed for zone state\n");
         return -ENOMEM;
     }
-    imrsim_init_zone_state_default(state_size);   
-    imrsim_dev_idle_init();      
+    imrsim_init_zone_state_default(state_size);   //初始化zone_state
+    imrsim_dev_idle_init();      //设备空闲时间初始化。
     return 0;
 }
 
@@ -268,16 +269,15 @@ static void imrsim_write_completion(struct bio *bio, int err)
     }
 }
 
-/* To get device mapping offset. */
+/* To get device mapping offset. 获取设备映射偏移量。*/
 static sector_t imrsim_map_sector(struct dm_target *ti, 
                                   sector_t bi_sector)
 {
-    struct imrsim_c *c = ti->private;  // dm_target-private:target specific data 
-    return c->start + dm_target_offset(ti, bi_sector);  // Sector offset taken relative to the start of the target instead of
-                                                        // relative to the start of the device.
+    struct imrsim_c *c = ti->private;
+    return c->start + dm_target_offset(ti, bi_sector);
 }
 
-/* read page (for meta-data) */
+/* read page (for meta-data) 读取页面（用于元数据）*/
 static int imrsim_read_page(struct block_device *dev, sector_t lba,
                             int size, struct page *page)
 {
@@ -289,7 +289,7 @@ static int imrsim_read_page(struct block_device *dev, sector_t lba,
         printk(KERN_ERR "imrsim: %s bio_alloc failed\n", __FUNCTION__);
         return -EFAULT;
     }
-    bio->bi_bdev = dev;  //存放对应的块设备
+    bio->bi_bdev = dev;
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
     bio->bi_sector = lba;
     #else
@@ -310,7 +310,7 @@ static int imrsim_read_page(struct block_device *dev, sector_t lba,
     return ret;
 }
 
-/* write page (for meta-data) */
+/* write page (for meta-data) 写页（用于元数据）*/
 static int imrsim_write_page(struct block_device *dev, sector_t lba,
                             __u32 size, struct page *page)
 {
@@ -338,11 +338,11 @@ static int imrsim_write_page(struct block_device *dev, sector_t lba,
         printk(KERN_ERR "imrsim: pstore bio write failed\n");
         ret = -EIO;
     }
-    bio_put(bio);  //bio_put()函数减少bio中引用计数器(bi_cnt)的值，如果该值等于0，则释放bio结构以及相关的bio_vec结构。
+    bio_put(bio);
     return ret;
 }
 
-/* End event for rmw bio */
+/* End event for rmw bio rmw bio 的结束事件*/
 static void imrsim_end_rmw(struct bio *bio, int err)
 {
     int i;
@@ -362,7 +362,7 @@ static void imrsim_end_rmw(struct bio *bio, int err)
     }
 }
 
-/* rmw task - sub thread*/
+/* rmw task - sub thread  rmw 任务 -子线程 */
 int read_modify_write_task(void *arg)
 {
     
@@ -376,10 +376,10 @@ int read_modify_write_task(void *arg)
     if(imrsim_rmw_task.bio)
     {
         printk(KERN_INFO "imrsim: enter rmw process and back up\n");
-        // read the blocks needed to back up
+        // read the blocks needed to back up  读取需要备份块
         for(i=0; i<n; i++)
         {
-            pages[i] = alloc_page(GFP_KERNEL);  //alloc_page(GFP_KERNEL,3) 分配2^3个物理页
+            pages[i] = alloc_page(GFP_KERNEL);
             if(!pages[i]){
                 printk(KERN_ERR "imrsim: no enough memory to allocate a page\n");
                 return -ENOMEM;
@@ -404,12 +404,12 @@ int read_modify_write_task(void *arg)
         }
 
         printk(KERN_INFO "imrsim: write bio.\n");
-        // write current bio
+        // write current bio  写当前bio
         submit_bio(WRITE_FUA, imrsim_rmw_task.bio);
         cond_resched();
 
         printk(KERN_INFO "imrsim: write back.\n");
-        // write back
+        // write back 回写
         for(i=0; i<n; i++)
         {
             struct bio *wbio = bio_alloc(GFP_NOIO, 1);
@@ -424,7 +424,7 @@ int read_modify_write_task(void *arg)
             cond_resched();
         }
 
-        // release pages
+        // release pages  释放页
         for(i=0; i<n; i++)
         {
             __free_page(pages[i]);
@@ -436,22 +436,22 @@ int read_modify_write_task(void *arg)
     return 0;
 }
 
-/* RMW event caused by update to bottom track */
+/* RMW event caused by update to bottom track 底部磁道更新引起的RMW事件*/
 void imrsim_rmw_thread(struct dm_target *ti)
 {
     imrsim_rmw_task.task = kthread_create(read_modify_write_task, ti, "rmw thread");
     if(imrsim_rmw_task.task){
         printk(KERN_INFO "imrsim: rmw thread created : %d.\n", imrsim_rmw_task.task->pid);
-        init_completion(&imrsim_completion.rmw_event);
-        wake_up_process(imrsim_rmw_task.task);
-        wait_for_completion(&imrsim_completion.rmw_event);
+        init_completion(&imrsim_completion.rmw_event);  //初始化一个信号量
+        wake_up_process(imrsim_rmw_task.task);  //唤醒处于睡眠状态的进程
+        wait_for_completion(&imrsim_completion.rmw_event); //等待信号量的释放
         //kthread_stop(imrsim_rmw_task.task);
         printk(KERN_INFO "imrsim: rmw task end.\n");
     }
 }
 
 
-/* To get page number and next page. */
+/* To get page number and next page. 获取页码和下一页*/
 static __u32 imrsim_pstore_pg_idx(__u32 idx, __u32 *pg_nxt)
 {
     __u32 tmp = IMR_PSTORE_PG_OFF + sizeof(struct imrsim_zone_stats)*idx;
@@ -462,6 +462,7 @@ static __u32 imrsim_pstore_pg_idx(__u32 idx, __u32 *pg_nxt)
 }
 
 /* Persistent storage - handled in a variety of cases depending on the type of metadata change.*/
+/*持久存储 -根据元数据更改的类型在各种情况下进行处理。*/
 static int imrsim_flush_persistence(struct dm_target *ti)
 {
     void             *page_addr;
@@ -533,7 +534,7 @@ static int imrsim_flush_persistence(struct dm_target *ti)
     return 0;
 }
 
-/* To persist meta-data. */
+/* To persist meta-data. 持久化元数据。*/
 static int imrsim_save_persistence(struct dm_target *ti)
 {
     void             *page_addr;
@@ -579,7 +580,7 @@ static int imrsim_save_persistence(struct dm_target *ti)
     return 0;
 }
 
-/* To load metadata from persistent storage. */
+/* To load metadata from persistent storage. 从持久存储加载元数据。*/
 static int imrsim_load_persistence(struct dm_target *ti)
 {
     __u64            sizedev;
@@ -664,7 +665,7 @@ static int imrsim_load_persistence(struct dm_target *ti)
     return -EINVAL;
 }
 
-/* persistent storage task */
+/* persistent storage task 持久化存储任务*/
 static int imrsim_persistence_task(void *arg)
 {
     struct dm_target *ti = (struct dm_target *)arg;
@@ -697,7 +698,7 @@ static int imrsim_persistence_task(void *arg)
     return 0;
 }
 
-/* persistent storage thread */
+/* persistent storage thread 久化存储线程*/
 static int imrsim_persistence_thread(struct dm_target *ti)
 {
     int ret = 0;
@@ -729,7 +730,7 @@ static int imrsim_persistence_thread(struct dm_target *ti)
     return 0;
 }
 
-/* To update device idle time. */
+/* To update device idle time. 更新设备空闲时间。*/
 static void imrsim_dev_idle_update(void)
 {
     __u32 dt = 0;
@@ -777,6 +778,7 @@ static void imrsim_report_stats(struct imrsim_stats *stats)
 }
 
 /* The following are interface methods with EXPORT_SYMBOL. */
+/*以下是带有 EXPORT_SYMBOL 的接口方法。*/
 
 /* To get the last read error. */
 int imrsim_get_last_rd_error(__u32 *last_error)
@@ -826,7 +828,7 @@ int imrsim_get_num_zones(__u32* num_zones)
 }
 EXPORT_SYMBOL(imrsim_get_num_zones);
 
-/* To get the number of sectors in a zone. */
+/* To get the number of sectors in a zone.  获取zone中的扇区数。 */
 int imrsim_get_size_zone_default(__u32 *size_zone)
 {
     printk(KERN_INFO "imrsim: %s called.\n", __FUNCTION__);
@@ -839,7 +841,7 @@ int imrsim_get_size_zone_default(__u32 *size_zone)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_get_size_zone_default);
+EXPORT_SYMBOL(imrsim_get_size_zone_default);  //使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用。
 
 /* To set the default zone size. */
 int imrsim_set_size_zone_default(__u32 size_zone)
@@ -1270,7 +1272,7 @@ void imrsim_log_error(struct bio* bio, __u32 uerr)
     }
 }
 
-/* The following is the relevant method to build the target_type structure. */
+/* The following is the relevant method to build the target_type structure.  下面是构建target_type结构的相关方法。*/
 /* device creation */
 static int imrsim_ctr(struct dm_target *ti,
                       unsigned int argc,
@@ -1688,7 +1690,7 @@ int imrsim_read_rule_check(struct bio *bio, __u32 zone_idx,
     __u32 rv;
     __u8 ret;
 
-    zlba = zone_idx_lba(zone_idx);
+    zlba = zone_idx_lba(zone_idx);  //计算zone开始的sector地址。
 
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
     lba = bio->bi_sector;
@@ -1778,8 +1780,7 @@ static bool imrsim_ptask_gap_ok(__u32 idx)
 int imrsim_map(struct dm_target *ti, struct bio *bio)
 {
     struct imrsim_c *c = ti->private;
-    int cdir = bio_data_dir(bio);      // Return the data direction, READ or WRITE.
-                                       // #define bio_data_dir(bio) \ (op_is_write(bio_op(bio)) ? WRITE : READ) 
+    int cdir = bio_data_dir(bio);       //该函数用于获得数据传输的方向是READ还是WRITE
 
     if(bio){
         printk(KERN_INFO "imrsim_map: the bio has %u sectors.\n", bio_sectors(bio));
