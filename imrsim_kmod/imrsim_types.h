@@ -30,26 +30,26 @@ struct imrsim_zone_track{
     __u8     isUsedBlock[TOP_TRACK_SIZE];
 };
 
-struct imrsim_zone_status
+struct imrsim_zone_status    //记录每个zone的基本信息
 {
-    sector_t                     z_start;                /* blocks  */
-    __u32                        z_length;               /* sectors */
-    __u16                        z_conds;
-    __u8                         z_type;
-    __u8                         z_flag;
+    sector_t                     z_start;                /* blocks  */  //zone在磁盘模拟器中的编号（从0开始）
+    __u32                        z_length;               /* sectors */  //一个zone以扇区为单位的大小
+    __u16                        z_conds;                //zoe的状态（空、满、关闭、只读等）
+    __u8                         z_type;                 //zone的类型（这里都实现为传统可随机读写的类型）
+    __u8                         z_flag;                 //控制此案的读写许可
 	// save the records of all the top tracks in a zone, whether there is data
-    struct imrsim_zone_track     z_tracks[TOP_TRACK_NUM_TOTAL];  
-    // mapping table
+    struct imrsim_zone_track     z_tracks[TOP_TRACK_NUM_TOTAL];    //记录每个zone中所有磁道组中顶部磁道的信息，
+    // mapping table                                               //即顶部磁道的各个块是否存有有效数据
     __u32                        z_map_size;
     int                          z_pba_map[TOTAL_ITEMS];
 };
 
-struct imrsim_state_header
+struct imrsim_state_header  //记录基础的头部信息
 {
-    __u32  magic;
-    __u32  length;
-    __u32  version;
-    __u32  crc32;
+    __u32  magic;     //设备标识
+    __u32  length;    //imrsim_state结构体的大小
+    __u32  version;   //设备版本号
+    __u32  crc32;     //校验和
 };
 
 struct imrsim_idle_stats
@@ -82,13 +82,13 @@ struct imrsim_zone_stats
     __u32 z_write_total;            // Record the total number of writes in a zone
 };
 
-struct imrsim_stats
+struct imrsim_stats     //具体记录zone相关的统计信息
 {
-    struct imrsim_dev_stats  dev_stats;
-    __u32                    num_zones;
+    struct imrsim_dev_stats  dev_stats;               //设备信息
+    __u32                    num_zones;               //zone的总条目，表示磁盘由多少个zone组成
     __u64                    extra_write_total;      // Record the number of imrsim extra writes
     __u64                    write_total;            // Record the total number of imrsim writes
-    struct imrsim_zone_stats zone_stats[1];           
+    struct imrsim_zone_stats zone_stats[1];          //每一个zone的统计信息
 };
 
 struct imrsim_dev_config
@@ -100,16 +100,16 @@ struct imrsim_dev_config
     __u16 w_time_to_rmw_zone;    /* write time */
 };
 
-struct imrsim_config
+struct imrsim_config    //配置信息结构体，主要用来配置读写的延迟时间
 {
-    struct imrsim_dev_config  dev_config;
+    struct imrsim_dev_config  dev_config;  
 };
 
-struct imrsim_state
+struct imrsim_state   //设备统计信息结构体
 {
-    struct imrsim_state_header header;
-    struct imrsim_config       config;
-    struct imrsim_stats        stats;
+    struct imrsim_state_header header;   //头部
+    struct imrsim_config       config;   //配置信息
+    struct imrsim_stats        stats;    //设备统计信息
 };
 
 

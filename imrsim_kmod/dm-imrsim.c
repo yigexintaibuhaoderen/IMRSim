@@ -23,18 +23,18 @@
 */
 
 /* Some basic disk information */
-#define IMR_ZONE_SIZE_SHIFT_DEFAULT      16      /* number of blocks/zone, e.g. 2^16=65536 */
-#define IMR_BLOCK_SIZE_SHIFT_DEFAULT     3       /* number of sectors/block, 8   */
-#define IMR_PAGE_SIZE_SHIFT_DEFAULT      3       /* number of sectors/page, 8    */
-#define IMR_SECTOR_SIZE_SHIFT_DEFAULT    9       /* number of bytes/sector, 512  */
-#define IMR_TRANSFER_PENALTY             60      /* usec */
+#define IMR_ZONE_SIZE_SHIFT_DEFAULT      16      /* number of blocks/zone, e.g. 2^16=65536 */  //一个zone由多少块组成，256MB
+#define IMR_BLOCK_SIZE_SHIFT_DEFAULT     3       /* number of sectors/block, 8   */  //一个块由多少扇区组成，8个扇区为512b*8=4kb
+#define IMR_PAGE_SIZE_SHIFT_DEFAULT      3       /* number of sectors/page, 8    */  //一个页由多少扇区组成
+#define IMR_SECTOR_SIZE_SHIFT_DEFAULT    9       /* number of bytes/sector, 512  */  //一个扇区包括512字节
+#define IMR_TRANSFER_PENALTY             60      /* usec */   //延迟
 #define IMR_TRANSFER_PENALTY_MAX         1000    /* usec */
 #define IMR_ROTATE_PENALTY               11000   /* usec ,  5400rpm->  rotate time: 11ms*/
 
 
 #define IMR_ALLOCATION_PHASE             2     /* phase of data distribution (2-3)*/
 
-#define TOP_TRACK_NUM_TOTAL 64
+#define TOP_TRACK_NUM_TOTAL                    //一个zone中顶部磁道数量
 /*
  * The size of a zone is 256MB, divided into 64 track groups (top-bottom), with an average track of 2MB.
  * A group of top-bottom has 4MB, that is, 1024 blocks, and there are 64 groups of top-bottom in a zone.
@@ -42,14 +42,14 @@
 
 #define IMR_MAX_CAPACITY                 21474836480
 
-static __u64   IMR_CAPACITY;            /* disk capacity (in sectors) */
-static __u32   IMR_NUMZONES;            /* number of zones */
-static __u32   IMR_NUMZONES_DEFAULT;
-static __u32   IMR_ZONE_SIZE_SHIFT;     
-static __u32   IMR_BLOCK_SIZE_SHIFT;
+static __u64   IMR_CAPACITY;            /* disk capacity (in sectors) */  //磁盘容量（sector为单位）
+static __u32   IMR_NUMZONES;            /* number of zones */   //zone的数量
+static __u32   IMR_NUMZONES_DEFAULT;                            //zone的数量
+static __u32   IMR_ZONE_SIZE_SHIFT;                             //一个zone有多少块
+static __u32   IMR_BLOCK_SIZE_SHIFT;                            //一个块由多少扇区组成
 
-static __u32 IMR_TOP_TRACK_SIZE = 456;      /* number of blocks/topTrack  456 */
-static __u32 IMR_BOTTOM_TRACK_SIZE = 568;   /* number of blocks/bottomTrack  568 */
+static __u32 IMR_TOP_TRACK_SIZE = 456;      /* number of blocks/topTrack  456 */  //一个顶部磁道中有456个块
+static __u32 IMR_BOTTOM_TRACK_SIZE = 568;   /* number of blocks/bottomTrack  568 */ //一个底部磁道有568个块
 
 __u32 VERSION = IMRSIM_VERSION(1,1,0);      /* The version number of IMRSIM：VERSION(x,y,z)=>((x<<16)|(y<<8)|z) */
 
@@ -92,15 +92,18 @@ enum imrsim_conf_change{
 #define IMR_PSTORE_PG_GAP 2
 
 /* persistent storage task structure */
-static struct imrsim_pstore_task
+static struct imrsim_pstore_task    //元数据持久化任务，在主线程之外的一个线程中执行
 {
-    struct task_struct  *pstore_thread; 
+    struct task_struct  *pstore_thread;   // 进程描述符（process descriptor) 结构  持久化线程
     __u32                sts_zone_idx;
     __u32                stu_zone_idx[IMR_PSTORE_QDEPTH];
     __u8                 stu_zone_idx_cnt;
     __u8                 stu_zone_idx_gap;
-    sector_t             pstore_lba;
-    unsigned char        flag;              /* three bit for imrsim_conf_change */
+    sector_t             pstore_lba;       //持久化开始的地址
+    unsigned char        flag;              /* three bit for imrsim_conf_change */  //持计划类型标识
+                                            //利用该数据的最低3位分别表示3种磁盘配置改变的事件，
+                                            //0x01表示IMR_CONFIG_CHANGE，0x02表示IMR_STATS_CHANGE，
+                                            //0x04表示IMR_STATUS_CHANGE，判断时只需要用flag按位与不同类型的宏就能判断那种元数据发生了改变。
 }imrsim_ptask;
 
 /* RMW scheme structure */
@@ -145,8 +148,9 @@ static __u32 num_sectors_zone(void)
 }
 
 /* To get the sector address where the zone starts. */
+/*获取zone的起始地址*/
 static __u64 zone_idx_lba(__u64 idx){
-    return (idx << IMR_BLOCK_SIZE_SHIFT << IMR_ZONE_SIZE_SHIFT);
+    return (idx << IMR_BLOCK_SIZE_SHIFT << IMR_ZONE_SIZE_SHIFT);  
 }
 
 /* Returns the exponent of a power of 2. */
@@ -168,7 +172,7 @@ static void imrsim_dev_idle_init(void)
 }
 
 /* Basic information for initializing zone. */
-static void imrsim_init_zone_default(__u64 sizedev)   /* sizedev: in sectors */
+static void imrsim_init_zone_default(__u64 sizedev)   /* sizedev: in sectors */ //siedev以sector为单位
 {
     IMR_CAPACITY = sizedev;
     IMR_ZONE_SIZE_SHIFT = IMR_ZONE_SIZE_SHIFT_DEFAULT;
@@ -180,6 +184,7 @@ static void imrsim_init_zone_default(__u64 sizedev)   /* sizedev: in sectors */
 }
 
 /* Basic information for initializing the device state (zone_state) */
+/*磁盘统计信息*/
 static void imrsim_init_zone_state_default(__u32 state_size)
 {
     __u32 i;
@@ -203,6 +208,7 @@ static void imrsim_init_zone_state_default(__u32 state_size)
     zone_state->stats.write_total = 0;
     imrsim_reset_stats();  
     /* To allocate space for the zone_status array and initialize it. */
+    /*为 zone_status 数组分配空间并初始化它。*/
     zone_status = (struct imrsim_zone_status *)&zone_state->stats.zone_stats[IMR_NUMZONES];
     for(i=0; i<IMR_NUMZONES; i++){
         zone_status[i].z_start = i;
@@ -230,18 +236,18 @@ int imrsim_init_zone_state(__u64 sizedev)
         printk(KERN_ERR "imrsim: zero capacity detected\n");
         return -EINVAL;
     }
-    imrsim_init_zone_default(sizedev);     /* Initialize the basic information of the zone. */
+    imrsim_init_zone_default(sizedev);     /* Initialize the basic information of the zone.初始化zone的基本信息 */
     /* zone_state should not have allocated space, if it already exists, reclaim the space. */
     if(zone_state){
         vfree(zone_state);
     }
-    state_size = imrsim_state_size();
+    state_size = imrsim_state_size();  // 获取imrsim_state结构的大小
     zone_state = vzalloc(state_size);     /* Allocate memory space for zone_state */
     if(!zone_state){
         printk(KERN_ERR "imrsim: memory alloc failed for zone state\n");
         return -ENOMEM;
     }
-    imrsim_init_zone_state_default(state_size);   
+    imrsim_init_zone_state_default(state_size);   // 初始化设备状态（zone_state）的基本信息
     imrsim_dev_idle_init();      
     return 0;
 }
@@ -268,13 +274,15 @@ static void imrsim_write_completion(struct bio *bio, int err)
     }
 }
 
-/* To get device mapping offset. */
+/* To get device mapping offset.获取device映射偏移量。 */
 static sector_t imrsim_map_sector(struct dm_target *ti, 
                                   sector_t bi_sector)
 {
     struct imrsim_c *c = ti->private;  // dm_target-private:target specific data 
     return c->start + dm_target_offset(ti, bi_sector);  // Sector offset taken relative to the start of the target instead of
                                                         // relative to the start of the device.
+                                                        //根据target device的起始地址和该bio请求在mapped device设备上的偏移值
+                                                        //改变IO请求开始的扇区号bi_sector，从而完成IO请求的重定向
 }
 
 /* read page (for meta-data) */
@@ -283,7 +291,7 @@ static int imrsim_read_page(struct block_device *dev, sector_t lba,
 {
     //dump_stack();   // #include<asm/ptrace.h> Debugging: View function call stacks
     int ret = 0;
-    struct bio *bio = bio_alloc(GFP_NOIO, 1);
+    struct bio *bio = bio_alloc(GFP_NOIO, 1); //bio初始化
 
     if(!bio){
         printk(KERN_ERR "imrsim: %s bio_alloc failed\n", __FUNCTION__);
@@ -293,7 +301,7 @@ static int imrsim_read_page(struct block_device *dev, sector_t lba,
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3,14,0)
     bio->bi_sector = lba;
     #else
-    bio->bi_iter.bi_sector = lba;
+    bio->bi_iter.bi_sector = lba;   //请求的逻辑块地址，lba以扇区为单位
     #endif
     bio_add_page(bio, page, size, 0);
     init_completion(&imrsim_completion.read_event);
@@ -436,7 +444,7 @@ int read_modify_write_task(void *arg)
     return 0;
 }
 
-/* RMW event caused by update to bottom track */
+/* RMW event caused by update to bottom track  底部磁道更新引起的RMW事件*/
 void imrsim_rmw_thread(struct dm_target *ti)
 {
     imrsim_rmw_task.task = kthread_create(read_modify_write_task, ti, "rmw thread");
@@ -462,6 +470,7 @@ static __u32 imrsim_pstore_pg_idx(__u32 idx, __u32 *pg_nxt)
 }
 
 /* Persistent storage - handled in a variety of cases depending on the type of metadata change.*/
+/*持久存储 -根据元数据更改的类型在各种情况下进行处理。*/
 static int imrsim_flush_persistence(struct dm_target *ti)
 {
     void             *page_addr;
@@ -474,7 +483,7 @@ static int imrsim_flush_persistence(struct dm_target *ti)
     __u32            qidx;
 
     zdev = ti->private;
-    page = alloc_pages(GFP_KERNEL, 0);
+    page = alloc_pages(GFP_KERNEL, 0);  //内存分配物理页面alloc_pages(gfp, order)，2的order次。GFP_KERNEL为掩码
     if(!page){
         printk(KERN_ERR "imrsim: no enough memory to allocate a page\n");
         return -ENOMEM;
@@ -485,7 +494,7 @@ static int imrsim_flush_persistence(struct dm_target *ti)
         __free_pages(page, 0);
         return -EINVAL;
     }
-    crc = crc32(0, (unsigned char *)zone_state + sizeof(struct imrsim_state_header),
+    crc = crc32(0, (unsigned char *)zone_state + sizeof(struct imrsim_state_header),//生成str的32位循环冗余校验码多项式。这通常用于检查传输的数据是否完整。
                 zone_state->header.length - sizeof(struct imrsim_state_header));
     zone_state->header.crc32 = crc;
     if(imrsim_ptask.flag &= IMR_CONFIG_CHANGE){
@@ -534,6 +543,7 @@ static int imrsim_flush_persistence(struct dm_target *ti)
 }
 
 /* To persist meta-data. */
+/*持久化元数据*/
 static int imrsim_save_persistence(struct dm_target *ti)
 {
     void             *page_addr;
@@ -598,7 +608,7 @@ static int imrsim_load_persistence(struct dm_target *ti)
     sizedev = ti->len;
     imrsim_init_zone_default(sizedev);
     /* The starting address for persistent storage. */
-    imrsim_ptask.pstore_lba = IMR_NUMZONES_DEFAULT
+    imrsim_ptask.pstore_lba = IMR_NUMZONES_DEFAULT      //元数据的起始地址，元数据包括磁盘统计信息和zone状态信息
                               << IMR_ZONE_SIZE_SHIFT_DEFAULT
                               << IMR_BLOCK_SIZE_SHIFT_DEFAULT;
     page = alloc_pages(GFP_KERNEL, 0);
@@ -615,7 +625,7 @@ static int imrsim_load_persistence(struct dm_target *ti)
     imrsim_read_page(zdev->dev->bdev, imrsim_ptask.pstore_lba, PAGE_SIZE, page);
     memcpy(&header, page_addr, sizeof(struct imrsim_state_header));
     if(header.magic == 0xBEEFBEEF){
-        zone_state = vzalloc(header.length);
+        zone_state = vzalloc(header.length);  //vzalloc将申请到连续物理内存数据置为0
         if(!zone_state){
             printk(KERN_ERR "imrsim: zone_state error: no enough memory\n");
             goto rderr;
@@ -730,10 +740,12 @@ static int imrsim_persistence_thread(struct dm_target *ti)
 }
 
 /* To update device idle time. */
+/*更新设备空闲时间*/
 static void imrsim_dev_idle_update(void)
 {
     __u32 dt = 0;
-    if(jiffies > imrsim_dev_idle_checkpoint){
+    if(jiffies > imrsim_dev_idle_checkpoint){            //  Jiffies记录系统自开机以来，已经过了多少tick。
+        dt = (jiffies - imrsim_dev_idle_checkpoint) / HZ;//每发生一次timer interrupt，Jiffies变数会被加一。
         dt = (jiffies - imrsim_dev_idle_checkpoint) / HZ;
     }else{
         dt = (~(__u32)0 - imrsim_dev_idle_checkpoint + jiffies) / HZ;
@@ -824,9 +836,10 @@ int imrsim_get_num_zones(__u32* num_zones)
    mutex_unlock(&imrsim_zone_lock);
    return 0;
 }
-EXPORT_SYMBOL(imrsim_get_num_zones);
+EXPORT_SYMBOL(imrsim_get_num_zones);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To get the number of sectors in a zone. */
+/*计算一个zone有多少扇区*/
 int imrsim_get_size_zone_default(__u32 *size_zone)
 {
     printk(KERN_INFO "imrsim: %s called.\n", __FUNCTION__);
@@ -839,7 +852,7 @@ int imrsim_get_size_zone_default(__u32 *size_zone)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_get_size_zone_default);
+EXPORT_SYMBOL(imrsim_get_size_zone_default);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To set the default zone size. */
 int imrsim_set_size_zone_default(__u32 size_zone)
@@ -866,7 +879,7 @@ int imrsim_set_size_zone_default(__u32 size_zone)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_set_size_zone_default);
+EXPORT_SYMBOL(imrsim_set_size_zone_default);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To reset default config. */
 int imrsim_reset_default_config(void)
@@ -876,7 +889,7 @@ int imrsim_reset_default_config(void)
     imrsim_reset_default_device_config();
     return 0;
 }
-EXPORT_SYMBOL(imrsim_reset_default_config);
+EXPORT_SYMBOL(imrsim_reset_default_config);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To reset default device config. */
 int imrsim_reset_default_device_config(void)
@@ -890,7 +903,7 @@ int imrsim_reset_default_device_config(void)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_reset_default_device_config);
+EXPORT_SYMBOL(imrsim_reset_default_device_config);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To get device config. */
 int imrsim_get_device_config(struct imrsim_dev_config *device_config)
@@ -906,7 +919,7 @@ int imrsim_get_device_config(struct imrsim_dev_config *device_config)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_get_device_config);
+EXPORT_SYMBOL(imrsim_get_device_config);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To set device read config. */
 int imrsim_set_device_rconfig(struct imrsim_dev_config *device_config)
@@ -922,7 +935,7 @@ int imrsim_set_device_rconfig(struct imrsim_dev_config *device_config)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_set_device_rconfig);
+EXPORT_SYMBOL(imrsim_set_device_rconfig);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To set device write config. */
 int imrsim_set_device_wconfig(struct imrsim_dev_config *device_config)
@@ -938,7 +951,7 @@ int imrsim_set_device_wconfig(struct imrsim_dev_config *device_config)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_set_device_wconfig);
+EXPORT_SYMBOL(imrsim_set_device_wconfig);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To set read delay. */
 int imrsim_set_device_rconfig_delay(struct imrsim_dev_config *device_config)
@@ -958,7 +971,7 @@ int imrsim_set_device_rconfig_delay(struct imrsim_dev_config *device_config)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_set_device_rconfig_delay);
+EXPORT_SYMBOL(imrsim_set_device_rconfig_delay);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To set write delay. */
 int imrsim_set_device_wconfig_delay(struct imrsim_dev_config *device_config)
@@ -978,7 +991,7 @@ int imrsim_set_device_wconfig_delay(struct imrsim_dev_config *device_config)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_set_device_wconfig_delay);
+EXPORT_SYMBOL(imrsim_set_device_wconfig_delay);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To reset default zone config. */
 int imrsim_reset_default_zone_config(void)
@@ -1000,7 +1013,7 @@ int imrsim_reset_default_zone_config(void)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_reset_default_zone_config);
+EXPORT_SYMBOL(imrsim_reset_default_zone_config);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To clear config of a zone. */
 int imrsim_clear_zone_config(void)
@@ -1015,7 +1028,7 @@ int imrsim_clear_zone_config(void)
     mutex_unlock(&imrsim_zone_lock);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_clear_zone_config);
+EXPORT_SYMBOL(imrsim_clear_zone_config);//使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* Count the number of Z_TYPE_SEQUENTIAL type zones. @Deprecated */
 static int imrsim_zone_seq_count(void)
@@ -1101,7 +1114,7 @@ int imrsim_modify_zone_config(struct imrsim_zone_status *z_status)
       zone_status[z_status->z_start].z_conds);
     return 0;
 }
-EXPORT_SYMBOL(imrsim_modify_zone_config);
+EXPORT_SYMBOL(imrsim_modify_zone_config);////使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To add zone configuration. @Deprecated */
 int imrsim_add_zone_config(struct imrsim_zone_status *zone_sts)
@@ -1145,13 +1158,14 @@ int imrsim_add_zone_config(struct imrsim_zone_status *zone_sts)
    mutex_unlock(&imrsim_zone_lock);
    return 0;
 }
-EXPORT_SYMBOL(imrsim_add_zone_config);
+EXPORT_SYMBOL(imrsim_add_zone_config);////使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To reset statistics for a zone. */
+/*重置zone的统计信息。*/
 int imrsim_reset_zone_stats(sector_t start_sector)
 {
-    __u32 zone_idx = start_sector >> IMR_BLOCK_SIZE_SHIFT >> IMR_ZONE_SIZE_SHIFT;
-
+    __u32 zone_idx = start_sector >> IMR_BLOCK_SIZE_SHIFT >> IMR_ZONE_SIZE_SHIFT;   //lba所在的zone编号zone_idx
+                                                                                    //除以一个zone的块数量以及一个块的扇区数量就可以获得
     printk(KERN_INFO "imrsim: %s called.\n", __FUNCTION__);
     if(IMR_NUMZONES <= zone_idx){
         printk(KERN_ERR "imrsim: %s start sector is out of range\n", __FUNCTION__);
@@ -1167,20 +1181,21 @@ int imrsim_reset_zone_stats(sector_t start_sector)
           0, sizeof(__u32));
     return 0;
 }
-EXPORT_SYMBOL(imrsim_reset_zone_stats);
+EXPORT_SYMBOL(imrsim_reset_zone_stats);  //使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To reset zone_stats. */
+/*重置zone_stats*/
 int imrsim_reset_stats(void)
 {
     printk(KERN_INFO "imrsim: %s: called.\n", __FUNCTION__);
     memset(&zone_state->stats.dev_stats.idle_stats, 0, sizeof(struct imrsim_idle_stats));
     memset(&zone_state->stats.extra_write_total, 0, sizeof(__u64));
-    memset(&zone_state->stats.write_total, 0, sizeof(__u64));
-    memset(zone_state->stats.zone_stats, 0, zone_state->stats.num_zones * 
-          sizeof(struct imrsim_zone_stats));
+    memset(&zone_state->stats.write_total, 0, sizeof(__u64)); //memset(void *s, int ch, size_t n) 
+    memset(zone_state->stats.zone_stats, 0, zone_state->stats.num_zones * //将s中当前位置后面的n个字节 （typedef unsigned int size_t ）
+          sizeof(struct imrsim_zone_stats));                              //用 ch 替换并返回 s。对结构体或数组清零最快的方法
     return 0;
 }
-EXPORT_SYMBOL(imrsim_reset_stats);
+EXPORT_SYMBOL(imrsim_reset_stats);  //使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* To get zone_stats. */
 int imrsim_get_stats(struct imrsim_stats *stats)
@@ -1190,10 +1205,10 @@ int imrsim_get_stats(struct imrsim_stats *stats)
         printk(KERN_ERR "imrsim: NULL pointer passed through\n");
         return -EINVAL;
     }
-    memcpy(stats, &(zone_state->stats), imrsim_stats_size());
+    memcpy(stats, &(zone_state->stats), imrsim_stats_size()); //拷贝函数，将zone_state->stats拷贝到stats
     return 0;
 }
-EXPORT_SYMBOL(imrsim_get_stats);
+EXPORT_SYMBOL(imrsim_get_stats); //使用EXPORT_SYMBOL可以将一个函数以符号的方式导出给其他模块使用
 
 /* @Deprecated */
 int imrsim_blkdev_reset_zone_ptr(sector_t start_sector)
@@ -1272,7 +1287,7 @@ void imrsim_log_error(struct bio* bio, __u32 uerr)
 
 /* The following is the relevant method to build the target_type structure. */
 /* device creation */
-static int imrsim_ctr(struct dm_target *ti,
+static int imrsim_ctr(struct dm_target *ti,    //创建imrsim_c结构，初始化一些元数据
                       unsigned int argc,
                       char **argv)
 {
@@ -1299,7 +1314,7 @@ static int imrsim_ctr(struct dm_target *ti,
         ti->error = "dm-imrsim: error: invalid argument device sector";
         return -EINVAL;
     }
-    c = kmalloc(sizeof(*c), GFP_KERNEL);    // To allocate physically contiguous memory.
+    c = kmalloc(sizeof(*c), GFP_KERNEL);    // To allocate physically contiguous memory.  分配物理上的连续内存。
     if(!c){
         ti->error = "dm-imrsim: error: no enough memory";
         return -ENOMEM;
@@ -1341,7 +1356,7 @@ static int imrsim_ctr(struct dm_target *ti,
 }
 
 /* device destory */
-static void imrsim_dtr(struct dm_target *ti)
+static void imrsim_dtr(struct dm_target *ti)  //释放imrsim_c以及元数据的空间
 {
     struct imrsim_c *c = (struct imrsim_c *) ti->private;
 
@@ -1364,17 +1379,18 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
     __u64  block_offset;  // The offset of the block in the zone
     __u64  boundary;
     __u64  elba;
-    __u64  zlba;
+    __u64  zlba;          //zone的起始地址
     __u32  relocateTrackno;   // In a stage allocation, how many tracks are the relocated lba on?
-    __u32  rv;       // rule violation
+    __u32  rv;       // rule violation  违反规则
     __u32  z_size;
-    __u32  trackno;  // on the top-bottom track group
+    __u32  trackno;  // on the top-bottom track group  lba在当前zone的第几号磁道组trackno
     __u32  blockno;  // The number of the block corresponding to lba on the track
     __u32  trackrate;  // Track ratio, p.s. linux kernel does not support floating point calculation.
-    __u16  wa_penalty;
+    __u16  wa_penalty;  //写放大惩罚
     __u8   isTopTrack;
-    __u8   rewriteSign;
+    __u8   rewriteSign;   //重写标志？
     __u8   ret=1;       // Determine whether the block requested by lba is in the mapping table.
+                        //判断lba请求的block是否在映射表中。
 
     zlba = zone_idx_lba(zone_idx);
 
@@ -1537,7 +1553,7 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
                 lba = bio->bi_iter.bi_sector;
                 lba_offset = bio->bi_iter.bi_sector - zlba;
                 block_offset = lba_offset >> IMR_BLOCK_SIZE_SHIFT;
-                ret = zone_status[zone_idx].z_pba_map[block_offset]!=-1?1:0;
+                ret = zone_status[zone_idx].z_pba_map[block_offset]!=-1?1:0;  //判断lba请求的block是否在映射表中。
                 if(!ret){         // a new write operation
                     // 填充映射表，按照阶段情况分配磁道，写入数据
                     boundary = IMR_BOTTOM_TRACK_SIZE * TOP_TRACK_NUM_TOTAL;
@@ -1616,8 +1632,8 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
     }
     //printk(KERN_INFO "imrsim: %s called! lba: %llu, zlba: %llu ~~\n", __FUNCTION__, lba, zlba);
 
-    trackno = (lba - zlba) / ((IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) << 
-                IMR_BLOCK_SIZE_SHIFT);
+    trackno = (lba - zlba) / ((IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<   //lba在当前zone的第几号磁道组trackno
+                IMR_BLOCK_SIZE_SHIFT);   //lba-zlba表示lba在某个zone上的偏移量，而这个偏移量除以一个磁道组的块数就能够得到lba在多少号磁道组上。
     // If it is a new write operation, there is no need to judge isTopTrack
     if(ret){
         isTopTrack = (lba - (zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<
@@ -1625,11 +1641,12 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
     }
     printk(KERN_INFO "imrsim: %s trackno: %u, isTopTrack: %u.\n",__FUNCTION__, trackno, isTopTrack);
 
-    // record this write operation
+    // record this write operation  记录写操作
     zone_state->stats.zone_stats[zone_idx].z_write_total++;
     zone_state->stats.write_total++;
 
     // If lba is on the top track, mark the top track with data, and on the bottom track, determine whether to rewrite
+    //如果lba(实际是pba)在top track上，则在top track上标记data，在bottom track上，判断是否rewrite
     if(isTopTrack){
         blockno = (lba - (zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<
                 IMR_BLOCK_SIZE_SHIFT))) >> IMR_BLOCK_SIZE_SHIFT;
@@ -1641,11 +1658,11 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
         blockno = ((lba - (zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<
                 IMR_BLOCK_SIZE_SHIFT))) >> IMR_BLOCK_SIZE_SHIFT) - IMR_TOP_TRACK_SIZE;
         trackrate = IMR_BOTTOM_TRACK_SIZE * 10000 / IMR_TOP_TRACK_SIZE;
-        int wa_pba1=-1,wa_pba2=-1;
+        int wa_pba1=-1,wa_pba2=-1;  //需要在相邻两个磁道上产生的写放大
         imrsim_rmw_task.lba_num=0;
-        if(trackno>=0 && zone_status[zone_idx].z_tracks[trackno].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){
+        if(trackno>=0 && zone_status[zone_idx].z_tracks[trackno].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){ //trackno号磁道有数据
             printk(KERN_INFO "imrsim: write amplification(zone_idx[%u]trackno), block: %u .\n",zone_idx, (__u32)(blockno*10000/trackrate));
-            // record write amplification
+            // record write amplification  记录写放大
             zone_state->stats.zone_stats[zone_idx].z_extra_write_total++;
             zone_state->stats.zone_stats[zone_idx].z_write_total++;
             zone_state->stats.extra_write_total++;
@@ -1657,7 +1674,7 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
             imrsim_rmw_task.lba_num++;
             wa_pba1=lba>>IMR_BLOCK_SIZE_SHIFT;
         }
-        if(trackno+1<TOP_TRACK_NUM_TOTAL && zone_status[zone_idx].z_tracks[trackno+1].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){
+        if(trackno+1<TOP_TRACK_NUM_TOTAL && zone_status[zone_idx].z_tracks[trackno+1].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){////trackno+号磁道有数据
             printk(KERN_INFO "imrsim: write amplification(trackno+1), block: %u .\n", (__u32)(blockno*10000/trackrate));
             zone_state->stats.zone_stats[zone_idx].z_extra_write_total++;
             zone_state->stats.zone_stats[zone_idx].z_write_total++;
@@ -1679,7 +1696,7 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
 }
 
 /* Device Read Rules */
-int imrsim_read_rule_check(struct bio *bio, __u32 zone_idx, 
+int imrsim_read_rule_check(struct bio *bio, __u32 zone_idx,    //lba所在的zone编号zone_idx
                            sector_t bio_sectors, int policy_flag)
 {
     __u64 lba;
@@ -1708,7 +1725,7 @@ int imrsim_read_rule_check(struct bio *bio, __u32 zone_idx,
     {
         __u32 block_offset = (lba-zlba)>>IMR_BLOCK_SIZE_SHIFT;
         ret = zone_status[zone_idx].z_pba_map[block_offset]!=-1?1:0;
-        if(ret){
+        if(ret){   //ret!=-1 说明存在可读数据
             bio->bi_iter.bi_sector = zlba 
                 + (zone_status[zone_idx].z_pba_map[block_offset] << IMR_BLOCK_SIZE_SHIFT)
                 + (lba-zlba)%(1<<IMR_BLOCK_SIZE_SHIFT);
@@ -1726,7 +1743,7 @@ int imrsim_read_rule_check(struct bio *bio, __u32 zone_idx,
     rv = 0;
     elba = lba + bio_sectors;
     
-    if(elba > (zlba + num_sectors_zone())){
+    if(elba > (zlba + num_sectors_zone())){   //跨zone读取
         printk(KERN_ERR "imrsim: error: read across zone: %u.%012llx.%08lx\n",
                zone_idx, lba, bio_sectors);
         rv++;
@@ -1775,7 +1792,7 @@ static bool imrsim_ptask_gap_ok(__u32 idx)
 }
 
 /* I/O mapping */
-int imrsim_map(struct dm_target *ti, struct bio *bio)
+int imrsim_map(struct dm_target *ti, struct bio *bio)  //IO请求映射
 {
     struct imrsim_c *c = ti->private;
     int cdir = bio_data_dir(bio);      // Return the data direction, READ or WRITE.
@@ -1793,14 +1810,14 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
     __u32 zone_idx;
     __u64 lba;
 
-    mutex_lock(&imrsim_zone_lock);
+    mutex_lock(&imrsim_zone_lock);   //锁上互斥锁
     //printk(KERN_INFO "zone_lock.\n");
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
     zone_idx = bio->bi_sector >> IMR_BLOCK_SIZE_SHIFT >> IMR_ZONE_SIZE_SHIFT;
     lba = bio->bi_sector;
     #else
     zone_idx = bio->bi_iter.bi_sector >> IMR_BLOCK_SIZE_SHIFT >> IMR_ZONE_SIZE_SHIFT;
-    lba = bio->bi_iter.bi_sector;
+    lba = bio->bi_iter.bi_sector;  //bio内的bvec_iter也记录了当前IO请求在磁盘上的起始扇区以及处理进度。
     #endif
 
     //printk(KERN_INFO "imrsim: map- lba is %llu\n", lba);
@@ -1826,7 +1843,7 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
         imrsim_log_error(bio, IMR_ERR_ZONE_OFFLINE);
         goto nomap;
     }
-    bio->bi_bdev = c->dev->bdev;
+    bio->bi_bdev = c->dev->bdev;   // struct block_device	*bi_bdev = struct block_device *bdev
     policy_rflag = zone_state->config.dev_config.out_of_policy_read_flag;
     policy_wflag = zone_state->config.dev_config.out_of_policy_write_flag;
     
@@ -1836,7 +1853,7 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
             printk(KERN_DEBUG "imrsim: %s WRITE %u.%012llx:%08lx.\n", __FUNCTION__,
                 zone_idx, lba, bio_sectors);
         }
-        if ((zone_status[zone_idx].z_conds == Z_COND_RO) && !policy_wflag) {
+        if ((zone_status[zone_idx].z_conds == Z_COND_RO) && !policy_wflag) {  //！polic_wflag代表无法写
             printk(KERN_ERR "imrsim:error: zone is read only. zone_idx: %u\n", zone_idx);  
             imrsim_log_error(bio, IMR_ERR_WRITE_RO);
             goto nomap;
@@ -1847,22 +1864,22 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
             imrsim_log_error(bio, IMR_ERR_WRITE_FULL);
             goto nomap;
         }
-        ret = imrsim_write_rule_check(bio, zone_idx, bio_sectors, policy_wflag);
+        ret = imrsim_write_rule_check(bio, zone_idx, bio_sectors, policy_wflag);  // ret=-242/1/0，1代表发生重写，0代表无重写
         if(ret<0){
             if(policy_wflag == 1 && policy_rflag == 1){
-                goto mapped;
+                goto mapped;     //map函数修改了bio的内容，希望DM将bio按照新内容再分发
             }
-            penalty = 0;
+            penalty = 0;      
             if(policy_wflag == 1){
                 penalty = zone_state->config.dev_config.w_time_to_rmw_zone;
                 printk(KERN_ERR "imrsim: %s: write error passed: out of policy write flagged on\n", __FUNCTION__);
-                udelay(penalty);
+                udelay(penalty);   //延迟函数
             }else{
                 goto nomap;
             }
         }
         if(ret>0){
-            goto submitted;
+            goto submitted;   //map函数将bio赋值后又分发出去
         }
         imrsim_ptask.flag |= IMR_STATUS_CHANGE;
         if(imrsim_ptask.stu_zone_idx_cnt == IMR_PSTORE_QDEPTH){
@@ -1880,8 +1897,8 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
             printk(KERN_DEBUG "imrsim: %s READ %u.%012llx:%08lx.\n", __FUNCTION__,
                     zone_idx, lba, bio_sectors);
         }
-        ret = imrsim_read_rule_check(bio, zone_idx, bio_sectors, policy_rflag);
-        if(ret){
+        ret = imrsim_read_rule_check(bio, zone_idx, bio_sectors, policy_rflag); //ret=-242或0
+        if(ret){  //ret=-242=IMR_ERR_OUT_OF_POLICY
             if(policy_wflag == 1 && policy_rflag == 1){
                 printk(KERN_ERR "imrsim: out of policy read passthrough applied\n");
                 goto mapped;
@@ -1900,15 +1917,15 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
         }
     }
     mapped:
-    if (bio_sectors(bio))
+    if (bio_sectors(bio))   //bio内sector的数量
     #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 14, 0)
         bio->bi_sector =  imrsim_map_sector(ti,bio->bi_sector);
     #else
         bio->bi_iter.bi_sector =  imrsim_map_sector(ti, bio->bi_iter.bi_sector);
     #endif
-    mutex_unlock(&imrsim_zone_lock);
+    mutex_unlock(&imrsim_zone_lock);   //解锁
     //printk(KERN_INFO "zone_unlock.\n");
-    return DM_MAPIO_REMAPPED;
+    return DM_MAPIO_REMAPPED;          //map函数修改了bio的内容，希望DM将bio按照新内容再分发
 
     submitted:
     printk(KERN_INFO "imrsim_map: submitted and conduct rmw!\n");
@@ -1916,7 +1933,7 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
     imrsim_rmw_thread(ti);
     mutex_unlock(&imrsim_zone_lock);
     printk(KERN_INFO "imrsim_map: end rmw!\n");
-    return DM_MAPIO_SUBMITTED;
+    return DM_MAPIO_SUBMITTED;     //map函数将bio赋值后又分发出去
 
     nomap:
     imrsim_ptask.flag |= IMR_STATS_CHANGE;
@@ -1927,7 +1944,7 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)
 }
 
 /* Device status query */
-static void imrsim_status(struct dm_target* ti, 
+static void imrsim_status(struct dm_target* ti,   //imrsim_c状态查询
                           status_type_t type,
                           unsigned status_flags, 
                           char* result,
@@ -2079,7 +2096,7 @@ int imrsim_query_zones(sector_t lba, int criteria,
 EXPORT_SYMBOL(imrsim_query_zones);
 
 /* The ioctl interface method implements specific interface functions. */
-int imrsim_ioctl(struct dm_target *ti,
+int imrsim_ioctl(struct dm_target *ti,   //向用户程序暴露的ioctl接口
                  unsigned int cmd,
                  unsigned long arg)
 {
@@ -2358,7 +2375,7 @@ int imrsim_ioctl(struct dm_target *ti,
 }
 
 /* To merge requests. */
-static int imrsim_merge(struct dm_target* ti, 
+static int imrsim_merge(struct dm_target* ti,                //IO请求合并
                         struct bvec_merge_data* bvm,
                         struct bio_vec* biovec, 
                         int max_size)
@@ -2376,7 +2393,7 @@ static int imrsim_merge(struct dm_target* ti,
 }
 
 /* iterate devices */
-static int imrsim_iterate_devices(struct dm_target *ti,
+static int imrsim_iterate_devices(struct dm_target *ti,     //imrsim_c设备迭代
                                   iterate_devices_callout_fn fn,
                                   void *data)
 {
@@ -2387,6 +2404,8 @@ static int imrsim_iterate_devices(struct dm_target *ti,
 
 /* Core structure - represents the target-driven plug-in, 
 and the structure collects the function entry for the functions implemented by the driver plug-in */
+/*将具体函数的地址汇集到target_type结构体中*/
+/*对目标设备定义相关的操作，则需要一个target_type结构体，该结构包含对目标设备具体操作函数的入口*/
 static struct target_type imrsim_target = 
 {
     .name            = "imrsim",
@@ -2402,7 +2421,7 @@ static struct target_type imrsim_target =
 };
 
 /* init IMRSim module */
-static int __init dm_imrsim_init(void)
+static int __init dm_imrsim_init(void)    // 内核模块入口
 {
     int ret = 0;
 
@@ -2415,13 +2434,13 @@ static int __init dm_imrsim_init(void)
 }
 
 /* kill IMRSim module */
-static void dm_imrsim_exit(void)
+static void dm_imrsim_exit(void)            // 内核模块出口
 {
-    dm_unregister_target(&imrsim_target);
+    dm_unregister_target(&imrsim_target);  // 撤销目标设备
 }
 
-module_init(dm_imrsim_init);    
-module_exit(dm_imrsim_exit);    
+module_init(dm_imrsim_init);                // 模块入口宏
+module_exit(dm_imrsim_exit);                // 模块出口宏
 
 /* Module related signature information */
 MODULE_DESCRIPTION(DM_NAME "IMR Simulator");
