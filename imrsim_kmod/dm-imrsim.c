@@ -59,12 +59,15 @@ struct imrsim_c{             /* Mapped devices in the Device Mapper framework, a
 };
 
 /* Mutex resource locks */
+/*互斥资源锁*/
 struct mutex                     imrsim_zone_lock;
 struct mutex                     imrsim_ioctl_lock;
 
 /* IMRSIM Statistics */
+/*IMRSim统计数据*/
 static struct imrsim_state       *zone_state = NULL;
 /* Array of zone status information */
+/*zone状态信息数组*/
 static struct imrsim_zone_status *zone_status = NULL;
 
 /* error log */
@@ -77,6 +80,7 @@ static unsigned long imrsim_dev_idle_checkpoint = 0;
 int imrsim_single = 0;
 
 /* Constants representing configuration changes */
+/*表示配置更改的常量*/
 enum imrsim_conf_change{
     IMR_NO_CHANGE     = 0x00,
     IMR_CONFIG_CHANGE = 0x01,
@@ -107,6 +111,7 @@ static struct imrsim_pstore_task    //元数据持久化任务，在主线程之
 }imrsim_ptask;
 
 /* RMW scheme structure */
+/*RMW方案结构*/
 static struct imrsim_RMW_task
 {
     struct task_struct  *task;
@@ -379,7 +384,7 @@ int read_modify_write_task(void *arg)
     struct dm_target * ti = (struct dm_target *)arg;
     struct imrsim_c *c = ti->private;
     __u8 i;
-    __u8 n = imrsim_rmw_task.lba_num;
+    __u8 n = imrsim_rmw_task.lba_num;//从mrsim_write_rule_check函数接收imrsim_rmw_task.lba_num
     struct page *pages[2];
     void  *page_addrs[2];
 
@@ -405,7 +410,7 @@ int read_modify_write_task(void *arg)
             init_completion(&imrsim_completion.read_event);
             rbio->bi_private = &imrsim_completion.read_event;
             rbio->bi_bdev = c->dev->bdev;
-            rbio->bi_iter.bi_sector = imrsim_map_sector(ti, imrsim_rmw_task.lba[i]);
+            rbio->bi_iter.bi_sector = imrsim_map_sector(ti, imrsim_rmw_task.lba[i]);//根据相邻顶部磁道的位置映射rmw位置
             rbio->bi_end_io = imrsim_end_rmw;
             bio_add_page(rbio, pages[i], PAGE_SIZE, 0);
             submit_bio(READ | REQ_SYNC, rbio);
@@ -419,7 +424,9 @@ int read_modify_write_task(void *arg)
         cond_resched();
 
         printk(KERN_INFO "imrsim: write back.\n");
-        // write back  回写
+        // write back  回写。
+        //如果修改rmw策略为mom，则写回位置应该通过计算寻找一个较为cold磁道中的位置。
+        //即imrsim_rmw_task.lba[i])应该重新通过算法计算得到。
         for(i=0; i<n; i++)
         {
             struct bio *wbio = bio_alloc(GFP_NOIO, 1);
@@ -1389,7 +1396,7 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
     __u32  trackno;  // on the top-bottom track group  lba在当前zone的第几号磁道组trackno
     __u32  blockno;  // The number of the block corresponding to lba on the track
     __u32  trackrate;  // Track ratio, p.s. linux kernel does not support floating point calculation.
-    __u16  wa_penalty;  //写放大惩罚
+    __u16  wa_penalty;  //写放大惩罚?延迟
     __u8   isTopTrack;
     __u8   rewriteSign;   //重写标志？
     __u8   ret=1;       // Determine whether the block requested by lba is in the mapping table.
@@ -1638,7 +1645,7 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
     trackno = (lba - zlba) / ((IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<   //lba在当前zone的第几号磁道组trackno
                 IMR_BLOCK_SIZE_SHIFT);   //lba-zlba表示lba在某个zone上的偏移量，而这个偏移量除以一个磁道组的块数就能够得到lba在多少号磁道组上。
     // If it is a new write operation, there is no need to judge isTopTrack
-    if(ret){
+    if(ret){  //ret非0说明是更新操作，需要判断被更新的是顶部磁道还是底部磁道
         isTopTrack = (lba - (zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<
                     IMR_BLOCK_SIZE_SHIFT))) < (IMR_TOP_TRACK_SIZE << IMR_BLOCK_SIZE_SHIFT) ? 1 : 0;
     }
@@ -1650,19 +1657,19 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
 
     // If lba is on the top track, mark the top track with data, and on the bottom track, determine whether to rewrite
     //如果lba(实际是pba)在top track上，则在top track上标记data，在bottom track上，判断是否rewrite
-    if(isTopTrack){
+    if(isTopTrack){  //更新顶部磁道
         blockno = (lba - (zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<
-                IMR_BLOCK_SIZE_SHIFT))) >> IMR_BLOCK_SIZE_SHIFT;
+                IMR_BLOCK_SIZE_SHIFT))) >> IMR_BLOCK_SIZE_SHIFT;//顶部磁道中需要更新的块
         zone_status[zone_idx].z_tracks[trackno].isUsedBlock[blockno]=1;
         //printk(KERN_INFO "imrsim: SIGN - block is remember\n");
-    }else{
+    }else{      //更新底部磁道，对相邻的顶部磁道记录写放大
         wa_penalty=0;
         rewriteSign=0;
         blockno = ((lba - (zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<
-                IMR_BLOCK_SIZE_SHIFT))) >> IMR_BLOCK_SIZE_SHIFT) - IMR_TOP_TRACK_SIZE;
-        trackrate = IMR_BOTTOM_TRACK_SIZE * 10000 / IMR_TOP_TRACK_SIZE;
+                IMR_BLOCK_SIZE_SHIFT))) >> IMR_BLOCK_SIZE_SHIFT) - IMR_TOP_TRACK_SIZE;  //底部磁道需要更新的块号blockno
+        trackrate = IMR_BOTTOM_TRACK_SIZE * 10000 / IMR_TOP_TRACK_SIZE; //底部磁道和顶部磁道中块的数量之比
         int wa_pba1=-1,wa_pba2=-1;  //需要在相邻两个磁道上产生的写放大
-        imrsim_rmw_task.lba_num=0;
+        imrsim_rmw_task.lba_num=0;   //更新底部磁道需要进行rmw过程
         if(trackno>=0 && zone_status[zone_idx].z_tracks[trackno].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){ //trackno号磁道有数据
             printk(KERN_INFO "imrsim: write amplification(zone_idx[%u]trackno), block: %u .\n",zone_idx, (__u32)(blockno*10000/trackrate));
             // record write amplification  记录写放大
@@ -1672,12 +1679,12 @@ int imrsim_write_rule_check(struct bio *bio, __u32 zone_idx,
             zone_state->stats.write_total++;
             rewriteSign++;
             lba = zlba + (trackno * (IMR_TOP_TRACK_SIZE + IMR_BOTTOM_TRACK_SIZE) <<IMR_BLOCK_SIZE_SHIFT) 
-                    + ((__u32)(blockno*10000/trackrate) <<IMR_BLOCK_SIZE_SHIFT);
-            imrsim_rmw_task.lba[imrsim_rmw_task.lba_num] = (sector_t)lba;
-            imrsim_rmw_task.lba_num++;
-            wa_pba1=lba>>IMR_BLOCK_SIZE_SHIFT;
+                    + ((__u32)(blockno*10000/trackrate) <<IMR_BLOCK_SIZE_SHIFT);//第一个相邻顶部磁道的位置
+            imrsim_rmw_task.lba[imrsim_rmw_task.lba_num] = (sector_t)lba;       //对此位置的块进行rmw，lba强制转换成sector_t
+            imrsim_rmw_task.lba_num++;  //imrsim_rmw_task.lba[]数组位置后移一位,以记录下一个rmw
+            wa_pba1=lba>>IMR_BLOCK_SIZE_SHIFT;//记录写放大的位置-pba
         }
-        if(trackno+1<TOP_TRACK_NUM_TOTAL && zone_status[zone_idx].z_tracks[trackno+1].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){////trackno+号磁道有数据
+        if(trackno+1<TOP_TRACK_NUM_TOTAL && zone_status[zone_idx].z_tracks[trackno+1].isUsedBlock[(__u32)(blockno*10000/trackrate)]==1){//trackno+1号磁道有数据
             printk(KERN_INFO "imrsim: write amplification(trackno+1), block: %u .\n", (__u32)(blockno*10000/trackrate));
             zone_state->stats.zone_stats[zone_idx].z_extra_write_total++;
             zone_state->stats.zone_stats[zone_idx].z_write_total++;
@@ -1932,7 +1939,7 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)  //IO请求映射
 
     submitted:
     printk(KERN_INFO "imrsim_map: submitted and conduct rmw!\n");
-    imrsim_rmw_task.bio = bio;
+    imrsim_rmw_task.bio = bio;//将bio放入rmw的bio中，以进行rmw过程
     imrsim_rmw_thread(ti);
     mutex_unlock(&imrsim_zone_lock);
     printk(KERN_INFO "imrsim_map: end rmw!\n");
