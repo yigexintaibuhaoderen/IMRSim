@@ -34,7 +34,7 @@
 
 #define IMR_ALLOCATION_PHASE             2     /* phase of data distribution (2-3)*/
 
-#define TOP_TRACK_NUM_TOTAL                    //一个zone中顶部磁道数量
+#define TOP_TRACK_NUM_TOTAL              64      //一个zone中顶部磁道数量
 /*
  * The size of a zone is 256MB, divided into 64 track groups (top-bottom), with an average track of 2MB.
  * A group of top-bottom has 4MB, that is, 1024 blocks, and there are 64 groups of top-bottom in a zone.
