@@ -314,7 +314,7 @@ static int imrsim_read_page(struct block_device *dev, sector_t lba,
     bio->bi_end_io = imrsim_read_completion;
     submit_bio(READ | REQ_SYNC, bio);
     wait_for_completion(&imrsim_completion.read_event);
-    ret = test_bit(BIO_UPTODATE, &bio->bi_flags);
+    ret = test_bit(BIO_UPTODATE, &bio->bi_flags);//返回位的当前值
     if(!ret){
         printk(KERN_ERR "imrsim: pstore bio read failed\n");
         ret = -EIO;
@@ -371,7 +371,7 @@ static void imrsim_end_rmw(struct bio *bio, int err)
         // if(bio_data_dir(bio) == READ){
         //     printk(KERN_INFO "imrsim: read bio end.\n");
         // }
-        complete((struct completion *)bio->bi_private);   // rmw 同步控制
+        complete((struct completion *)bio->bi_private);   // rmw 同步控制。发送完成量，唤醒一个等待
         bio_put(bio);
     }
 }
@@ -481,7 +481,7 @@ static __u32 imrsim_pstore_pg_idx(__u32 idx, __u32 *pg_nxt)
 
 /* Persistent storage - handled in a variety of cases depending on the type of metadata change.*/
 /*持久存储 -根据元数据更改的类型在各种情况下进行处理。*/
-static int imrsim_flush_persistence(struct dm_target *ti)
+static int imrsim_flush_persistence(struct dm_target *ti)//元数据同步磁盘
 {
     void             *page_addr;
     struct page      *page;
