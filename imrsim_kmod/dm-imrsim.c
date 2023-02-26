@@ -1943,7 +1943,7 @@ int imrsim_map(struct dm_target *ti, struct bio *bio)  //IO请求映射
     imrsim_rmw_thread(ti);
     mutex_unlock(&imrsim_zone_lock);
     printk(KERN_INFO "imrsim_map: end rmw!\n");
-    return DM_MAPIO_SUBMITTED;     //map函数将bio赋值后又分发出去
+    return DM_MAPIO_SUBMITTED;     //已提交bio
 
     nomap:
     imrsim_ptask.flag |= IMR_STATS_CHANGE;
