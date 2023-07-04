@@ -1,4 +1,4 @@
-#ifndef _IMRSIM_TYPES_H
+#ifndef _IMRSIM_TYPES_H //#ifndef #endif 用来防止重复加载
 #define _IMRSIM_TYPES_H
 
 #define IMRSIM_VERSION(a,b,c)  ((a<<16)|(b<<8)|c)
