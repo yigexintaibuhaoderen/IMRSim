@@ -756,7 +756,6 @@ static void imrsim_dev_idle_update(void)
     __u32 dt = 0;
     if(jiffies > imrsim_dev_idle_checkpoint){            //  Jiffies记录系统自开机以来，已经过了多少tick。
         dt = (jiffies - imrsim_dev_idle_checkpoint) / HZ;//每发生一次timer interrupt，Jiffies变数会被加一。
-        dt = (jiffies - imrsim_dev_idle_checkpoint) / HZ;
     }else{
         dt = (~(__u32)0 - imrsim_dev_idle_checkpoint + jiffies) / HZ;
     }
